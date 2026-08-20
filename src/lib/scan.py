@@ -383,7 +383,8 @@ def scanSingleFile(pathToFile, libAtten, disp = True, dieIfError = False) -> lis
             if decompileArgLen < 3: continue
             if ans:= libAtten.predictApiList (szArgv):
                 enumList = ans
-                enumList = [a for a in ans if abs ( apiParamLenDB[a.lower()] - decompileArgLen) <= 2] # TODO: arguments decompile not always correct.
+                enumList = [a for a in ans if a.lower() in apiParamLenDB
+                            and abs ( apiParamLenDB[a.lower()] - decompileArgLen) <= 2] # TODO: arguments decompile not always correct.
                 #enumList = [a for a in ans if apiParamLenDB[a.lower()] > 2] # only those APIs with 4+ args easy to predict. 
                 if len(enumList) > 0:
                     if disp: logger.warning(f"[FOUND] ({va:x}) - {', '.join(enumList[:3])}")

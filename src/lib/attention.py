@@ -2,6 +2,41 @@ import os, time, pickle
 import numpy as np
 BLOCK_SIZE = 20
 
+MODEL_FILENAME = "model32.cuida"
+_LFS_POINTER_MAGIC = b"version https://git-lfs"
+
+def resolveModelPath(name:str = MODEL_FILENAME) -> str:
+    """Locate the CuIDA checkpoint.
+
+    The release ships the weights at the repository root, but dropping them
+    next to this module (src/lib/) works too. $CUIDA_MODEL overrides both.
+    """
+    hereLibDir = os.path.dirname(os.path.abspath(__file__))     # <repo>/src/lib
+    srcDir     = os.path.dirname(hereLibDir)                    # <repo>/src
+    repoDir    = os.path.dirname(srcDir)                        # <repo>
+
+    lookup = [ os.environ.get("CUIDA_MODEL"),
+               os.path.join(hereLibDir, name),
+               os.path.join(srcDir, name),
+               os.path.join(repoDir, name) ]
+
+    for pathToModel in lookup:
+        if pathToModel and os.path.isfile(pathToModel):
+            with open(pathToModel, "rb") as probe:
+                isGitLfsStub = probe.read(len(_LFS_POINTER_MAGIC)) == _LFS_POINTER_MAGIC
+            if isGitLfsStub:
+                raise RuntimeError(
+                    f"{pathToModel} is a {os.path.getsize(pathToModel)}-byte Git LFS pointer, "
+                    f"not the {name} weights.\n"
+                    "    Pull the real checkpoint with:  git lfs install && git lfs pull" )
+            return pathToModel
+
+    raise FileNotFoundError(
+        f"Could not find the CuIDA checkpoint ({name}). Looked in:\n"
+        + "\n".join(f"    {p}" for p in lookup if p) + "\n"
+        "    Fetch it with `git lfs install && git lfs pull`, "
+        "or point $CUIDA_MODEL at the file." )
+
  # [n_q, d_k], [n_k, d_k], [n_k, d_v], [n_q, n_k] -> [n_q, d_v]
 def attention(q, k, v, mask): 
     def softmax(x):
@@ -36,14 +71,20 @@ def net_forward(x):
     v = linear( x, *lm_head )
     return v
 
-def loadModel_lastCheckpoint(pathToModel:str):
+def loadModel_lastCheckpoint(pathToModel:str = None):
     global verifyFor64, stoi, itos, net, vocab_size, n_embd, \
         npwQKV, att_seq_ln1, att_seq_ln2, att_seq_laynorm, emb, pe_emb, lm_head
 
+    # Callers used to hardcode src/lib/model32.cuida; fall back to the search
+    # path so a fresh clone (weights at the repo root) just works.
+    if not (pathToModel and os.path.isfile(pathToModel)):
+        pathToModel = resolveModelPath()
+
     verifyFor64 = False
-    stoi, itos, vocab_size, n_embd, \
-        npwQKV, att_seq_ln1, att_seq_ln2, att_seq_laynorm, \
-        emb, pe_emb, lm_head = pickle.load(open( pathToModel, "rb" ))
+    with open( pathToModel, "rb" ) as checkpoint:
+        stoi, itos, vocab_size, n_embd, \
+            npwQKV, att_seq_ln1, att_seq_ln2, att_seq_laynorm, \
+            emb, pe_emb, lm_head = pickle.load(checkpoint)
 
 def pretty_symbolic(token):
     if isinstance(token, tuple):

@@ -1,0 +1,18 @@
+# CuIDA runtime dependencies
+#
+# Verified on Python 3.13.1 / Windows 11 (2026-08). Python 3.9+ should work.
+#
+# vivisect and viv_utils are pinned on purpose: src/lib/scan.py monkey-patches
+# vivisect internals (impemu.monitor.AnalysisMonitor.apicall) and re-implements
+# parts of its emulator loop, so a minor upstream refactor can break analysis
+# in ways that are silent rather than loud. Bump these deliberately.
+vivisect==1.2.1
+viv_utils==0.8.0
+
+numpy>=1.24
+pefile>=2023.2.7
+rich>=13.0
+coloredlogs>=15.0
+
+# Required by nnYara.py only. The other two tools run without it.
+yara-python>=4.3

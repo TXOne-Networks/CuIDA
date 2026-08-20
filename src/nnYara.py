@@ -43,37 +43,59 @@ def yaraScanFile( pathToSample ):
 if __name__ == "__main__":
     if True:
         if len(sys.argv) == 1:
-            print("Usage: ./nnYara.py [Path/To/File] (-display) (-json: Output as JSON format)")
+            print("Usage: ./nnYara.py [Path/To/File] (-display) (-json) (--rules Path/To/YaraRules)")
             sys.exit(0)
     
     # attach community yara-rules!
     # ref: https://github.com/pombredanne/yara_scan/blob/master/yara_scan.py
-    global all_rules
-    try:
-        def test_rule(test_case):
-            try:
-                testit = yara.compile(filepath=test_case)
-                return True
-            except: return False
-        all_rules = {}
-        
-        pathToRules = os.path.join( os.path.dirname(__file__) + "\\lib", "yara-rules" )
-        sigfiles = list( glob.glob(f"{pathToRules}/**/*.yar", recursive=True) )
-        for root, directories, files in os.walk(pathToRules):
-            for file in files:
-                if "yar" in os.path.splitext(file)[1]:
-                    rule_case = os.path.join(root,file) 
-                    if test_rule(rule_case):
-                        all_rules[file] = rule_case
-        rules = yara.compile(filepaths=all_rules)
-    except Exception as e:
-        pass
-    
+    #
+    # The ruleset is deliberately not vendored (size + upstream licensing).
+    # Point CuIDA at any directory of *.yar files, in priority order:
+    #   --rules <dir>  >  $CUIDA_YARA_RULES  >  src/lib/yara-rules/
+    pathToRules = ( os.environ.get("CUIDA_YARA_RULES")
+                    or os.path.join( os.path.dirname(os.path.abspath(__file__)), "lib", "yara-rules" ) )
+    for flag in ("--rules", "-rules"):
+        if flag in sys.argv and sys.argv.index(flag) + 1 < len(sys.argv):
+            pathToRules = sys.argv[ sys.argv.index(flag) + 1 ]
+
+    if not os.path.isdir(pathToRules):
+        console.print(f"[!] YARA rule directory not found: {pathToRules}", style="bold red")
+        console.print("    Clone a community ruleset, e.g.:", style="dim")
+        console.print(f"      git clone --depth 1 https://github.com/Yara-Rules/rules {pathToRules}", style="dim")
+        console.print("    ...or pass --rules <dir>, or set $CUIDA_YARA_RULES.", style="dim")
+        sys.exit(1)
+
+    def test_rule(test_case):
+        try:
+            yara.compile(filepath=test_case)
+            return True
+        except Exception:
+            return False
+
+    all_rules, uncompilable = {}, 0
+    for root, directories, files in os.walk(pathToRules):
+        for file in files:
+            if "yar" in os.path.splitext(file)[1]:
+                rule_case = os.path.join(root, file)
+                if test_rule(rule_case):
+                    all_rules[file] = rule_case
+                else:
+                    uncompilable += 1
+
+    if not all_rules:
+        console.print(f"[!] No compilable *.yar file found under {pathToRules}", style="bold red")
+        sys.exit(1)
+
+    rules = yara.compile(filepaths=all_rules)
+    console.print(f"[v] {len(all_rules)} YARA rule files loaded from {pathToRules}"
+                  + (f" ({uncompilable} skipped: upstream rules that do not compile)" if uncompilable else ""),
+                  style="dim blue")
+
+
     import lib.scan, lib.attention
 
     init_time = time.time()
-    pathToModel = os.path.join(os.path.dirname(__file__) + "\\lib", 'model32.cuida')
-    lib.attention.loadModel_lastCheckpoint(pathToModel=pathToModel)
+    lib.attention.loadModel_lastCheckpoint()
 
     if os.path.isfile( sys.argv[1] ): 
         yaraScanFile( sys.argv[1] )

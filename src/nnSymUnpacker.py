@@ -14,8 +14,13 @@ def dumpPeImageByPeSieve(pid:int) -> str:
     # thanks for awesome tool PE-Sieve by @hasherezade
     # ref: https://github.com/hasherezade/pe-sieve
     # $ pe-sieve.exe /pid 32184 /dir pathToDir
-    pathToPeSieve = os.path.join( os.path.dirname(__file__) + "\\lib", "pe-sieve.exe" )
-    pathToTmpDump = os.path.join( os.path.dirname(__file__) + "\\lib" )
+    pathToPeSieve = os.path.join( os.path.dirname(os.path.abspath(__file__)), "lib", "pe-sieve.exe" )
+    pathToTmpDump = os.path.join( os.path.dirname(os.path.abspath(__file__)), "lib" )
+    if not os.path.isfile(pathToPeSieve):
+        logger.error(f"pe-sieve.exe not found at {pathToPeSieve}")
+        logger.error("Grab a release from https://github.com/hasherezade/pe-sieve/releases and drop it there.")
+        logger.error("(only needed to dump a live PID; scanning an existing dump file works without it)")
+        return None
     STR_OUT = subprocess.getoutput( f"{pathToPeSieve} /pid {pid} /dir {pathToTmpDump}" )
     if not "Dumped module to" in STR_OUT:
         return None
@@ -37,8 +42,7 @@ if __name__ == "__main__":
     init_time = time.time()    
     import lib.scan, lib.attention
     
-    pathToModel = os.path.join(os.path.dirname(__file__) + "\\lib", 'model32.cuida')
-    lib.attention.loadModel_lastCheckpoint(pathToModel=pathToModel)
+    lib.attention.loadModel_lastCheckpoint()
     
     if os.path.isfile( sys.argv[1] ):
         pathToFile = sys.argv[1]

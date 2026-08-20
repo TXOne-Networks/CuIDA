@@ -4,8 +4,7 @@ console = Console()
 
 def shcEmuScan( pathToShc:str , shcPtr_CallConv_Formatter:types.FunctionType ):
     import lib.scan, lib.attention
-    pathToModel = os.path.join(os.path.dirname(__file__) + "\\lib", 'model32.cuida')
-    lib.attention.loadModel_lastCheckpoint(pathToModel=pathToModel)
+    lib.attention.loadModel_lastCheckpoint()
     
     shcEmu = lib.scan.shellcodeEmulator( pathToShc, "i386" )
     collect = shcEmu.runAnalyze()
@@ -18,8 +17,8 @@ def shcEmuScan( pathToShc:str , shcPtr_CallConv_Formatter:types.FunctionType ):
                 szArgv, correctArgLen = shcPtr_CallConv_Formatter(szArgv, decompileArgLen)
                 if ans:= lib.attention.predictApiList (szArgv):
                     enumList = ans
-                    enumList = [a for a in ans if lib.scan.apiParamLenDB[a.lower()] == correctArgLen]
-                    enumList = [a for a in ans if lib.scan.apiParamLenDB[a.lower()] > 3] # only those APIs with 4+ args easy to predict. 
+                    enumList = [a for a in ans if lib.scan.apiParamLenDB.get(a.lower()) == correctArgLen]
+                    enumList = [a for a in ans if (lib.scan.apiParamLenDB.get(a.lower()) or 0) > 3] # only those APIs with 4+ args easy to predict. 
                     if len(enumList) > 0:
                         console.print(f"[b][‼] [default]{va:05x}: {', '.join(enumList)}", style="green")
         except Exception as e:
